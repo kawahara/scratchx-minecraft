@@ -1,6 +1,7 @@
 (function (ext) {
   var endpoint = 'http://localhost:8080/api';
   var apikey = 'ADMIN';
+  var delayMs = 100;
 
   var headers = {
     'x-webapi-key': apikey,
@@ -21,6 +22,18 @@
     });
   };
 
+  var setPlayer = function (obj) {
+    var player = obj.player;
+    var idx = players.findIndex(function (p) {
+      return p.uuid === player.uuid;
+    });
+    if (idx !== -1) {
+      players[idx] = player;
+    } else {
+      players.push(player);
+    }
+  }
+
   ext._shutdown = function () {
 
   };
@@ -29,6 +42,13 @@
     return {status: 2, msg: 'Ready'};
   };
 
+  var delay = function (response) {
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        resolve(response);
+      }, delayMs);
+    });
+  };
 
   ext.getBlock = function (world, x, y, z, callback) {
     var worldObj = getWorld(world);
@@ -39,6 +59,8 @@
       headers: headers
     }).then(function (response) {
       return response.json();
+    }).then(function (json) {
+      return delay(json)
     }).then(function (json) {
       callback(json.block.type.id);
     });
@@ -61,10 +83,10 @@
         block: {type: blocktype}
       })
     }).then(function (response) {
-      console.log(response);
       return response.json();
     }).then(function (json) {
-      console.log(json);
+      return delay(json);
+    }).then(function (json) {
       callback();
     });
   };
@@ -76,7 +98,29 @@
     }).then(function (response) {
       return response.json();
     }).then(function (json) {
+      return delay(json);
+    }).then(function (json) {
       players = json.players;
+      callback();
+    });
+  };
+
+  ext.getPlayerInfo = function (player, callback) {
+    var playerObj = getPlayer(player);
+    if (!playerObj) {
+      callback(null);
+    }
+
+    fetch(endpoint + '/player/' + playerObj.uuid, {
+      method: 'GET',
+      headers: headers
+    }).then(function (response) {
+      console.log(response);
+      return response.json();
+    }).then(function (json) {
+      return delay(json);
+    }).then(function (json) {
+      setPlayer(json);
       callback();
     });
   };
@@ -135,9 +179,10 @@
       body: JSON.stringify({name: 'Scratch', command: cmd + ' ' + args}),
       headers: headers
     }).then(function () {
+      return delay(null);
+    }).then(function () {
       callback();
     }).catch(function (e) {
-      console.log(e);
       callback();
     });
   };
@@ -164,7 +209,8 @@
       ['w', '%m.world の x=%n, y=%n, z=%n にあるブロックを %s にする', 'setBlock', '', 0, 0, 0, 'minecraft:air'],
       ['R', '%m.world の x=%n, y=%n, z=%n にあるブロックを取得', 'getBlock', '', 0, 0, 0],
       ['w', '%m.world の x=%n, y=%n, z=%n から x=%n, y=%n, z=%n にあるブロックを %s にする', 'fillBlock', '', 0, 0, 0, 'minecraft:air'],
-      ['w', 'プレイヤーの情報を取得', 'getPlayersInfo'],
+      ['w', 'プレイヤーの一覧を取得', 'getPlayersInfo'],
+      ['w', 'プレイヤー %s の情報を更新', 'getPlayerInfo', ''],
       ['r', 'プレイヤー %s のWorld', 'getPlayerWorld', ''],
       ['r', 'プレイヤー %s のx座標', 'getPlayerX', ''],
       ['r', 'プレイヤー %s のy座標', 'getPlayerY', ''],
@@ -215,7 +261,9 @@
 
   fetch(endpoint + '/world', {
     method: 'GET',
-    headers: headers
+    headers: {
+      'x-webapi-key': apikey
+    }
   }).then(function (response) {
     return response.json();
   }).then(function (json) {
